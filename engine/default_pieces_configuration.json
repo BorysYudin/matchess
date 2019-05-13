@@ -1,0 +1,18 @@
+{
+  "WHITE": {
+    "PAWN": ["a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2"],
+    "ROOK": ["a1", "h1"],
+    "KNIGHT": ["b1", "g1"],
+    "BISHOP": ["c1", "f1"],
+    "QUEEN": ["d1"],
+    "KING": ["e1"]
+  },
+  "BLACK": {
+    "PAWN": ["a7", "b7", "c7", "d7", "e7", "f7", "g7", "h7"],
+    "ROOK": ["a8", "h8"],
+    "KNIGHT": ["b8", "g8"],
+    "BISHOP": ["c8", "f8"],
+    "QUEEN": ["d8"],
+    "KING": ["e8"]
+  }
+}

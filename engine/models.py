@@ -1,4 +1,6 @@
 import abc
+import json
+import os
 
 from engine.constants import (PAWN, ROOK, KNIGHT, BISHOP, QUEEN, KING,
                               WHITE_INITIAL_SQUARES, BLACK_INITIAL_SQUARES,
@@ -106,15 +108,23 @@ class Rook(Piece):
 
     def calculate_available_moves(self, turn, board, controlled_squares=None,
                                   check_pieces=None):
-        pass
+        available_moves = []
 
-    # available_mooves = []
-    #
-    # for x, y in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-    #     square = Coordinates(self.current_square.x + self.step)
-    #     while
+        for x, y in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
+            square = Coordinates(self.current_square.x + x,
+                                 self.current_square.y + y)
+            board_piece = board.get_piece(square)
+            iteration = 1
+            while board.is_square_on_board(square) and board_piece is None:
+                iteration += 1
+                available_moves.append(square)
+                square = Coordinates(self.current_square.x + x * iteration,
+                                     self.current_square.y + y * iteration)
+                board_piece = board.get_piece(square)
+        self._available_moves = available_moves
+        return available_moves
 
-def __str__(self):
+    def __str__(self):
         return ("\u265C" if self.color == WHITE else '\u2656').center(5)
 
 
@@ -130,8 +140,8 @@ class Knight(Piece):
                      (-1, 2), (-1, -2)]:
             square = Coordinates(self.current_square.x + x,
                                  self.current_square.y + y)
-            if board.is_square_on_board(square) and (board.get_piece(
-                    square) != self.color or turn != self.color):
+            if board.is_square_on_board(square) and \
+                    board.get_piece(square) != self.color:
                 available_squares.append(square)
         self._available_moves = available_squares
         return available_squares
@@ -180,10 +190,10 @@ class PiecesManager:
     controlled_squares = []
     check_pieces = []
 
-    def __init__(self):
+    def __init__(self, configuration):
         self.pieces = {
-            WHITE: self.__create_white_pieces(),
-            BLACK: self.__create_black_pieces()
+            WHITE: self.__create_pieces(WHITE, configuration["WHITE"]),
+            BLACK: self.__create_pieces(BLACK, configuration["BLACK"])
         }
 
     def move_piece(self, color, from_square, to_square):
@@ -228,45 +238,16 @@ class PiecesManager:
                                                 self.check_pieces)
         return available_moves
 
-    def __create_white_pieces(self):
-        white_pieces = {}
-        white_pieces.update(
-            {Coordinates(x, 1): Pawn(WHITE, Coordinates(x, 1)) for x in
-             range(8)})
-        white_pieces.update(
-            {Coordinates(x, y): Rook(WHITE, Coordinates(x, y)) for x, y in
-             [(0, 0), (7, 0)]})
-        white_pieces.update(
-            {Coordinates(x, y): Knight(WHITE, Coordinates(x, y)) for x, y in
-             [(1, 0), (6, 0)]})
-        white_pieces.update(
-            {Coordinates(x, y): Bishop(WHITE, Coordinates(x, y)) for x, y in
-             [(2, 0), (5, 0)]})
-        white_pieces.update(
-            {Coordinates(3, 0): Queen(WHITE, Coordinates(3, 0))})
-        white_pieces.update(
-            {Coordinates(4, 0): King(WHITE, Coordinates(4, 0))})
-        return white_pieces
-
-    def __create_black_pieces(self):
-        black_pieces = {}
-        black_pieces.update(
-            {Coordinates(x, 6): Pawn(BLACK, Coordinates(x, 6)) for x in
-             range(8)})
-        black_pieces.update(
-            {Coordinates(x, y): Rook(BLACK, Coordinates(x, y)) for x, y in
-             [(0, 7), (7, 7)]})
-        black_pieces.update(
-            {Coordinates(x, y): Knight(BLACK, Coordinates(x, y)) for x, y in
-             [(1, 7), (6, 7)]})
-        black_pieces.update(
-            {Coordinates(x, y): Bishop(BLACK, Coordinates(x, y)) for x, y in
-             [(2, 7), (5, 7)]})
-        black_pieces.update(
-            {Coordinates(3, 7): Queen(BLACK, Coordinates(3, 7))})
-        black_pieces.update(
-            {Coordinates(4, 7): King(BLACK, Coordinates(4, 7))})
-        return black_pieces
+    def __create_pieces(self, color, configuration):
+        pieces = {}
+        for piece, squares in configuration.items():
+            _class = globals()[piece.capitalize()]
+            for square in squares:
+                _square = Coordinates.from_an(square)
+                pieces.update({
+                    _square: _class(color, _square)
+                })
+        return pieces
 
 
 class Board:
@@ -288,12 +269,12 @@ class Board:
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, configuration):
         self.turn = WHITE
         self.moves = 0
         self.is_check = False
         self.board = Board()
-        self.pieces_manager = PiecesManager()
+        self.pieces_manager = PiecesManager(configuration)
 
     def change_turn(self):
         self.turn = BLACK if self.turn == WHITE else WHITE
@@ -357,5 +338,10 @@ class Game:
 
 
 if __name__ == '__main__':
-    game = Game()
+    filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        'default_pieces_configuration.json')
+    with open(filename) as f:
+        configuration = json.load(f)
+
+    game = Game(configuration)
     game.start()

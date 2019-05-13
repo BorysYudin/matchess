@@ -9,7 +9,7 @@ class Coordinates:
         :return:
         """
         column, row = coordinates[:1].lower(), coordinates[1:]
-        x = 'abcdefgh'.index(column)
+        x = 'abcdefgh'.index(column.lower())
         return cls(x, int(row) - 1)
 
     def to_an(self):
