@@ -185,7 +185,22 @@ class Queen(Piece):
 
     def calculate_available_moves(self, turn, board, controlled_squares=None,
                                   check_pieces=None):
-        return []
+        available_moves = []
+
+        for x, y in [(1, 1), (-1, 1), (1, -1), (-1, -1), (1, 0), (-1, 0),
+                     (0, 1), (0, -1)]:
+            square = Coordinates(self.current_square.x + x,
+                                 self.current_square.y + y)
+            board_piece = board.get_piece(square)
+            iteration = 1
+            while board.is_square_on_board(square) and board_piece is None:
+                iteration += 1
+                available_moves.append(square)
+                square = Coordinates(self.current_square.x + x * iteration,
+                                     self.current_square.y + y * iteration)
+                board_piece = board.get_piece(square)
+        self._available_moves = available_moves
+        return available_moves
 
     def __str__(self):
         return ("\u265B" if self.color == WHITE else '\u2655').center(5)
@@ -197,7 +212,16 @@ class King(Piece):
 
     def calculate_available_moves(self, turn, board, controlled_squares=None,
                                   check_pieces=None):
-        return []
+        available_moves = []
+        for x, y in [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (1, -1),
+                     (-1, 1), (-1, -1)]:
+            square = Coordinates(self.current_square.x + x,
+                                 self.current_square.y + y)
+            if board.is_square_on_board(square) and \
+                    board.get_piece(square) != self.color:
+                available_moves.append(square)
+        self._available_moves = available_moves
+        return available_moves
 
     def __str__(self):
         return ("\u265A" if self.color == WHITE else '\u2654').center(5)
