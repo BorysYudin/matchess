@@ -3,7 +3,6 @@ import json
 import os
 
 from engine.constants import (PAWN, ROOK, KNIGHT, BISHOP, QUEEN, KING,
-                              WHITE_INITIAL_SQUARES, BLACK_INITIAL_SQUARES,
                               WHITE, BLACK)
 from engine.helpers import Coordinates
 
@@ -47,6 +46,10 @@ class Piece(metaclass=abc.ABCMeta):
 class Pawn(Piece):
     def __init__(self, color, current_square):
         super().__init__(PAWN, color, current_square)
+
+        # if we create piece not on initial row
+        if self.current_square.y not in (1, 6):
+            self.moves_count = 1
 
     @property
     def step(self):
@@ -92,8 +95,8 @@ class Pawn(Piece):
                                self.current_square.y + self.step)]
         for square in squares:
             board_piece = board.get_piece(square)
-            if board.is_square_on_board(
-                    square) and board_piece and board_piece != self.color:
+            if board.is_square_on_board(square) and \
+                    board_piece is not None and board_piece != self.color:
                 available_moves.append(square)
 
         return available_moves
@@ -156,7 +159,21 @@ class Bishop(Piece):
 
     def calculate_available_moves(self, turn, board, controlled_squares=None,
                                   check_pieces=None):
-        return []
+        available_moves = []
+
+        for x, y in [(1, 1), (-1, 1), (1, -1), (-1, -1)]:
+            square = Coordinates(self.current_square.x + x,
+                                 self.current_square.y + y)
+            board_piece = board.get_piece(square)
+            iteration = 1
+            while board.is_square_on_board(square) and board_piece is None:
+                iteration += 1
+                available_moves.append(square)
+                square = Coordinates(self.current_square.x + x * iteration,
+                                     self.current_square.y + y * iteration)
+                board_piece = board.get_piece(square)
+        self._available_moves = available_moves
+        return available_moves
 
     def __str__(self):
         return ("\u265D" if self.color == WHITE else '\u2657').center(5)
@@ -192,8 +209,8 @@ class PiecesManager:
 
     def __init__(self, configuration):
         self.pieces = {
-            WHITE: self.__create_pieces(WHITE, configuration["WHITE"]),
-            BLACK: self.__create_pieces(BLACK, configuration["BLACK"])
+            WHITE: self._initiate_pieces(WHITE, configuration["WHITE"]),
+            BLACK: self._initiate_pieces(BLACK, configuration["BLACK"])
         }
 
     def move_piece(self, color, from_square, to_square):
@@ -238,7 +255,7 @@ class PiecesManager:
                                                 self.check_pieces)
         return available_moves
 
-    def __create_pieces(self, color, configuration):
+    def _initiate_pieces(self, color, configuration):
         pieces = {}
         for piece, squares in configuration.items():
             _class = globals()[piece.capitalize()]
@@ -251,10 +268,16 @@ class PiecesManager:
 
 
 class Board:
-    pieces = {
-        **WHITE_INITIAL_SQUARES,
-        **BLACK_INITIAL_SQUARES
-    }
+    def __init__(self, configuration):
+        self.pieces = {}
+        self._initiate_pieces(configuration['WHITE'], 1)
+        self._initiate_pieces(configuration['BLACK'], 0)
+
+    def _initiate_pieces(self, configuration, value):
+        for piece, squares in configuration.items():
+            for square in squares:
+                square_ = Coordinates.from_an(square)
+                self.pieces[square_] = value
 
     def move_piece(self, from_square, to_square):
         piece = self.pieces.get(from_square)
@@ -273,7 +296,7 @@ class Game:
         self.turn = WHITE
         self.moves = 0
         self.is_check = False
-        self.board = Board()
+        self.board = Board(configuration)
         self.pieces_manager = PiecesManager(configuration)
 
     def change_turn(self):
@@ -338,8 +361,10 @@ class Game:
 
 
 if __name__ == '__main__':
+    # filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+    #                     'default_pieces_configuration.json')
     filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        'default_pieces_configuration.json')
+                            'temp.json')
     with open(filename) as f:
         configuration = json.load(f)
 
