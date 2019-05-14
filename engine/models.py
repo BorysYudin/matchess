@@ -16,6 +16,8 @@ class Piece(metaclass=abc.ABCMeta):
         'type', 'color', 'current_square', 'moves_count', 'prior_square',
         '_available_moves', 'is_on_board')
 
+    steps = []
+
     def __init__(self, type_, color, current_square):
         self.type = type_
         self.color = color
@@ -32,7 +34,7 @@ class Piece(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def calculate_available_moves(self, turn, board, controlled_squares=None,
                                   check_pieces=None):
-        raise NotImplemented
+        raise NotImplementedError
 
     def remove(self):
         self.is_on_board = False
@@ -41,6 +43,47 @@ class Piece(metaclass=abc.ABCMeta):
         self.moves_count += 1
         self.prior_square = self.current_square
         self.current_square = square
+
+
+class SingleStepMixin(metaclass=abc.ABCMeta):
+    def calculate_available_moves(self, turn, board, controlled_squares=None,
+                                  check_pieces=None):
+        available_moves = []
+
+        for x, y in self.steps:
+            square = Coordinates(self.current_square.x + x,
+                                 self.current_square.y + y)
+            square_piece = board.get_piece(square)
+            if board.is_square_on_board(square) and square_piece != self.color:
+                available_moves.append(square)
+
+        self._available_moves = available_moves
+        return available_moves
+
+
+class IterativeStepMixin(metaclass=abc.ABCMeta):
+    def calculate_available_moves(self, turn, board, controlled_squares=None,
+                                  check_pieces=None):
+        available_moves = []
+
+        for x, y in self.steps:
+            square = Coordinates(self.current_square.x + x,
+                                 self.current_square.y + y)
+            board_piece = board.get_piece(square)
+            iteration = 1
+            while board.is_square_on_board(square) and (
+                    board_piece is None or board_piece != self.color):
+                if board_piece is not None and board_piece != self.color:
+                    available_moves.append(square)
+                    break
+                iteration += 1
+                available_moves.append(square)
+                square = Coordinates(self.current_square.x + x * iteration,
+                                     self.current_square.y + y * iteration)
+                board_piece = board.get_piece(square)
+
+        self._available_moves = available_moves
+        return available_moves
 
 
 class Pawn(Piece):
@@ -67,24 +110,28 @@ class Pawn(Piece):
         self._available_moves = available_moves
         return available_moves
 
+    def _step_move(self, turn, board, controlled_squares, check_pieces,
+                   step):
+        square = Coordinates(self.current_square.x,
+                             self.current_square.y + step)
+        if board.is_square_on_board(square) and \
+                board.get_piece(square) is None:
+            return square
+
     def _available_forward_moves(self, turn, board, controlled_squares,
                                  check_pieces):
         available_moves = []
-        one_square_move = Coordinates(self.current_square.x,
-                                      self.current_square.y + self.step)
-        if board.is_square_on_board(one_square_move) and \
-                board.get_piece(one_square_move) is None:
-            available_moves.append(one_square_move)
-
-        two_squares_move = Coordinates(self.current_square.x,
-                                       self.current_square.y + self.step * 2)
-
-        if self.moves_count == 0 and \
-                board.is_square_on_board(two_squares_move) and \
-                board.get_piece(two_squares_move) is None:
+        one_square_move = self._step_move(turn, board, controlled_squares,
+                                          check_pieces, step=self.step)
+        available_moves.append(one_square_move)
+        if one_square_move and self.moves_count == 0:
+            two_squares_move = self._step_move(turn, board, controlled_squares,
+                                               check_pieces,
+                                               step=self.step * 2)
             available_moves.append(two_squares_move)
 
-        return available_moves
+        # filter not None values
+        return list(filter(bool, available_moves))
 
     def _available_attack_moves(self, turn, board, controlled_squares,
                                 check_pieces):
@@ -105,123 +152,52 @@ class Pawn(Piece):
         return ("\u265F" if self.color == WHITE else '\u2659').center(5)
 
 
-class Rook(Piece):
+class Rook(IterativeStepMixin, Piece):
+    steps = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+
     def __init__(self, color, current_square):
         super().__init__(ROOK, color, current_square)
-
-    def calculate_available_moves(self, turn, board, controlled_squares=None,
-                                  check_pieces=None):
-        available_moves = []
-
-        for x, y in [(1, 0), (-1, 0), (0, 1), (0, -1)]:
-            square = Coordinates(self.current_square.x + x,
-                                 self.current_square.y + y)
-            board_piece = board.get_piece(square)
-            iteration = 1
-            while board.is_square_on_board(square) and board_piece is None:
-                iteration += 1
-                available_moves.append(square)
-                square = Coordinates(self.current_square.x + x * iteration,
-                                     self.current_square.y + y * iteration)
-                board_piece = board.get_piece(square)
-        self._available_moves = available_moves
-        return available_moves
 
     def __str__(self):
         return ("\u265C" if self.color == WHITE else '\u2656').center(5)
 
 
-class Knight(Piece):
+class Knight(SingleStepMixin, Piece):
+    steps = [(2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (1, -2), (-1, 2),
+             (-1, -2)]
+
     def __init__(self, color, current_square):
         super().__init__(KNIGHT, color, current_square)
-
-    def calculate_available_moves(self, turn, board, controlled_squares=None,
-                                  check_pieces=None):
-        available_squares = []
-
-        for x, y in [(2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (1, -2),
-                     (-1, 2), (-1, -2)]:
-            square = Coordinates(self.current_square.x + x,
-                                 self.current_square.y + y)
-            if board.is_square_on_board(square) and \
-                    board.get_piece(square) != self.color:
-                available_squares.append(square)
-        self._available_moves = available_squares
-        return available_squares
 
     def __str__(self):
         return ("\u265E" if self.color == WHITE else '\u2658').center(5)
 
 
-class Bishop(Piece):
+class Bishop(IterativeStepMixin, Piece):
+    steps = [(1, 1), (-1, 1), (1, -1), (-1, -1)]
+
     def __init__(self, color, current_square):
         super().__init__(BISHOP, color, current_square)
-
-    def calculate_available_moves(self, turn, board, controlled_squares=None,
-                                  check_pieces=None):
-        available_moves = []
-
-        for x, y in [(1, 1), (-1, 1), (1, -1), (-1, -1)]:
-            square = Coordinates(self.current_square.x + x,
-                                 self.current_square.y + y)
-            board_piece = board.get_piece(square)
-            iteration = 1
-            while board.is_square_on_board(square) and board_piece is None:
-                iteration += 1
-                available_moves.append(square)
-                square = Coordinates(self.current_square.x + x * iteration,
-                                     self.current_square.y + y * iteration)
-                board_piece = board.get_piece(square)
-        self._available_moves = available_moves
-        return available_moves
 
     def __str__(self):
         return ("\u265D" if self.color == WHITE else '\u2657').center(5)
 
 
-class Queen(Piece):
+class Queen(IterativeStepMixin, Piece):
+    steps = [(x, y) for x in range(-1, 2) for y in range(-1, 2)]
+
     def __init__(self, color, current_square):
         super().__init__(QUEEN, color, current_square)
-
-    def calculate_available_moves(self, turn, board, controlled_squares=None,
-                                  check_pieces=None):
-        available_moves = []
-
-        for x, y in [(1, 1), (-1, 1), (1, -1), (-1, -1), (1, 0), (-1, 0),
-                     (0, 1), (0, -1)]:
-            square = Coordinates(self.current_square.x + x,
-                                 self.current_square.y + y)
-            board_piece = board.get_piece(square)
-            iteration = 1
-            while board.is_square_on_board(square) and board_piece is None:
-                iteration += 1
-                available_moves.append(square)
-                square = Coordinates(self.current_square.x + x * iteration,
-                                     self.current_square.y + y * iteration)
-                board_piece = board.get_piece(square)
-        self._available_moves = available_moves
-        return available_moves
 
     def __str__(self):
         return ("\u265B" if self.color == WHITE else '\u2655').center(5)
 
 
-class King(Piece):
+class King(SingleStepMixin, Piece):
+    steps = [(x, y) for x in range(-1, 2) for y in range(-1, 2)]
+
     def __init__(self, color, current_square):
         super().__init__(KING, color, current_square)
-
-    def calculate_available_moves(self, turn, board, controlled_squares=None,
-                                  check_pieces=None):
-        available_moves = []
-        for x, y in [(0, 1), (1, 0), (0, -1), (-1, 0), (1, 1), (1, -1),
-                     (-1, 1), (-1, -1)]:
-            square = Coordinates(self.current_square.x + x,
-                                 self.current_square.y + y)
-            if board.is_square_on_board(square) and \
-                    board.get_piece(square) != self.color:
-                available_moves.append(square)
-        self._available_moves = available_moves
-        return available_moves
 
     def __str__(self):
         return ("\u265A" if self.color == WHITE else '\u2654').center(5)
