@@ -2,9 +2,14 @@ import abc
 import json
 import os
 
+from collections import namedtuple
+
 from engine.constants import (PAWN, ROOK, KNIGHT, BISHOP, QUEEN, KING,
                               WHITE, BLACK)
-from engine.helpers import Coordinates
+from engine.helpers import Square
+
+GameState = namedtuple('GameState',
+                       ('turn', 'controlled_squares', 'check_pieces'))
 
 
 class InvalidMoveError(Exception):
@@ -14,9 +19,9 @@ class InvalidMoveError(Exception):
 class Piece(metaclass=abc.ABCMeta):
     __slots__ = (
         'type', 'color', 'current_square', 'moves_count', 'prior_square',
-        '_available_moves', 'is_on_board')
+        '_possible_movement_squares', 'is_on_board')
 
-    steps = []
+    movement_directions = []
 
     def __init__(self, type_, color, current_square):
         self.type = type_
@@ -24,66 +29,68 @@ class Piece(metaclass=abc.ABCMeta):
         self.current_square = current_square
         self.moves_count = 0
         self.prior_square = None
-        self._available_moves = []
         self.is_on_board = True
+        self._possible_movement_squares = []
 
     @property
-    def available_moves(self):
-        return self._available_moves
-
-    @abc.abstractmethod
-    def calculate_available_moves(self, turn, board, controlled_squares=None,
-                                  check_pieces=None):
-        raise NotImplementedError
+    def possible_movement_squares(self):
+        return self._possible_movement_squares
 
     def remove(self):
         self.is_on_board = False
 
-    def move(self, square):
+    def move(self, to_square):
         self.moves_count += 1
         self.prior_square = self.current_square
-        self.current_square = square
+        self.current_square = to_square
 
 
-class SingleStepMixin(metaclass=abc.ABCMeta):
-    def calculate_available_moves(self, turn, board, controlled_squares=None,
-                                  check_pieces=None):
-        available_moves = []
-
-        for x, y in self.steps:
-            square = Coordinates(self.current_square.x + x,
-                                 self.current_square.y + y)
-            square_piece = board.get_piece(square)
-            if board.is_square_on_board(square) and square_piece != self.color:
-                available_moves.append(square)
-
-        self._available_moves = available_moves
-        return available_moves
+class SingleMovementMixin(metaclass=abc.ABCMeta):
+    def calculate_possible_movement_squares(self):
+        self._possible_movement_sqares = []
+        for x, y in self.movement_directions:
+            square = Square(self.current_square.x + x,
+                            self.current_square.y + y)
+            piece_on_square = PiecesManager.get_piece(square)
+            if square.is_valid() and (piece_on_square is None or
+                                      piece_on_square.color != self.color):
+                self._possible_movement_squares.append(square)
 
 
-class IterativeStepMixin(metaclass=abc.ABCMeta):
-    def calculate_available_moves(self, turn, board, controlled_squares=None,
-                                  check_pieces=None):
-        available_moves = []
+class DirectionMovementMixin(metaclass=abc.ABCMeta):
+    def calculate_possible_movement_squares(self):
+        """
+        Calculates all possible movement squares in different directions
+        :return:
+        """
+        self._possible_movement_sqares = []
+        for x, y in self.movement_directions:
+            self._calculate_squares_for_direction(x, y)
 
-        for x, y in self.steps:
-            square = Coordinates(self.current_square.x + x,
-                                 self.current_square.y + y)
-            board_piece = board.get_piece(square)
-            iteration = 1
-            while board.is_square_on_board(square) and (
-                    board_piece is None or board_piece != self.color):
-                if board_piece is not None and board_piece != self.color:
-                    available_moves.append(square)
-                    break
-                iteration += 1
-                available_moves.append(square)
-                square = Coordinates(self.current_square.x + x * iteration,
-                                     self.current_square.y + y * iteration)
-                board_piece = board.get_piece(square)
+    def _calculate_squares_for_direction(self, x, y):
+        """
+        Calculates all possible movement squares in certain direction
+        :param x: direction x coordinate
+        :param y: direction y coordinate
+        :return:
+        """
+        iteration = 0
+        while True:
+            iteration += 1
+            square = Square(self.current_square.x + x * iteration,
+                            self.current_square.y + y * iteration)
 
-        self._available_moves = available_moves
-        return available_moves
+            if not square.is_valid():
+                break
+
+            piece_on_square = PiecesManager.get_piece(square)
+
+            if piece_on_square is not None:
+                if piece_on_square.color != self.color:
+                    self._possible_movement_squares.append(square)
+                break
+
+            self._possible_movement_squares.append(square)
 
 
 class Pawn(Piece):
@@ -95,65 +102,50 @@ class Pawn(Piece):
             self.moves_count = 1
 
     @property
-    def step(self):
+    def movement_direction(self, ):
         return 1 if self.color == WHITE else -1
 
-    def calculate_available_moves(self, turn, board, controlled_squares=None,
-                                  check_pieces=None):
-        available_moves = []
-        available_moves += self._available_forward_moves(turn, board,
-                                                         controlled_squares,
-                                                         check_pieces)
-        available_moves += self._available_attack_moves(turn, board,
-                                                        controlled_squares,
-                                                        check_pieces)
-        self._available_moves = available_moves
-        return available_moves
+    def calculate_possible_movement_squares(self):
+        self._possible_movement_squares = []
+        self._possible_forward_movement_squares()
+        self._possible_attack_movement_squares()
 
-    def _step_move(self, turn, board, controlled_squares, check_pieces,
-                   step):
-        square = Coordinates(self.current_square.x,
-                             self.current_square.y + step)
-        if board.is_square_on_board(square) and \
-                board.get_piece(square) is None:
+    def _step_move(self, step):
+        square = Square(self.current_square.x,
+                        self.current_square.y + step)
+        if square.is_valid() and PiecesManager.get_piece(square) is None:
             return square
 
-    def _available_forward_moves(self, turn, board, controlled_squares,
-                                 check_pieces):
-        available_moves = []
-        one_square_move = self._step_move(turn, board, controlled_squares,
-                                          check_pieces, step=self.step)
-        available_moves.append(one_square_move)
+    def _possible_forward_movement_squares(self):
+        possible_movement_squares = []
+        one_square_move = self._step_move(self.movement_direction)
+        possible_movement_squares.append(one_square_move)
+
         if one_square_move and self.moves_count == 0:
-            two_squares_move = self._step_move(turn, board, controlled_squares,
-                                               check_pieces,
-                                               step=self.step * 2)
-            available_moves.append(two_squares_move)
+            two_squares_move = self._step_move(self.movement_direction * 2)
+            possible_movement_squares.append(two_squares_move)
 
         # filter not None values
-        return list(filter(bool, available_moves))
+        self._possible_movement_squares += list(
+            filter(bool, possible_movement_squares))
 
-    def _available_attack_moves(self, turn, board, controlled_squares,
-                                check_pieces):
-        available_moves = []
-        squares = [Coordinates(self.current_square.x + self.step,
-                               self.current_square.y + self.step),
-                   Coordinates(self.current_square.x - self.step,
-                               self.current_square.y + self.step)]
+    def _possible_attack_movement_squares(self):
+        squares = [Square(self.current_square.x + self.movement_direction,
+                          self.current_square.y + self.movement_direction),
+                   Square(self.current_square.x - self.movement_direction,
+                          self.current_square.y + self.movement_direction)]
         for square in squares:
-            board_piece = board.get_piece(square)
-            if board.is_square_on_board(square) and \
-                    board_piece is not None and board_piece != self.color:
-                available_moves.append(square)
-
-        return available_moves
+            piece_on_square = PiecesManager.get_piece(square)
+            if square.is_valid() and piece_on_square is not None \
+                    and piece_on_square.color != self.color:
+                self._possible_movement_squares.append(square)
 
     def __str__(self):
         return ("\u265F" if self.color == WHITE else '\u2659').center(5)
 
 
-class Rook(IterativeStepMixin, Piece):
-    steps = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+class Rook(Piece, DirectionMovementMixin):
+    movement_directions = [(1, 0), (-1, 0), (0, 1), (0, -1)]
 
     def __init__(self, color, current_square):
         super().__init__(ROOK, color, current_square)
@@ -162,9 +154,9 @@ class Rook(IterativeStepMixin, Piece):
         return ("\u265C" if self.color == WHITE else '\u2656').center(5)
 
 
-class Knight(SingleStepMixin, Piece):
-    steps = [(2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (1, -2), (-1, 2),
-             (-1, -2)]
+class Knight(Piece, SingleMovementMixin):
+    movement_directions = [(2, 1), (2, -1), (-2, 1), (-2, -1), (1, 2), (1, -2),
+                           (-1, 2), (-1, -2)]
 
     def __init__(self, color, current_square):
         super().__init__(KNIGHT, color, current_square)
@@ -173,8 +165,8 @@ class Knight(SingleStepMixin, Piece):
         return ("\u265E" if self.color == WHITE else '\u2658').center(5)
 
 
-class Bishop(IterativeStepMixin, Piece):
-    steps = [(1, 1), (-1, 1), (1, -1), (-1, -1)]
+class Bishop(Piece, DirectionMovementMixin):
+    movement_directions = [(1, 1), (-1, 1), (1, -1), (-1, -1)]
 
     def __init__(self, color, current_square):
         super().__init__(BISHOP, color, current_square)
@@ -183,8 +175,8 @@ class Bishop(IterativeStepMixin, Piece):
         return ("\u265D" if self.color == WHITE else '\u2657').center(5)
 
 
-class Queen(IterativeStepMixin, Piece):
-    steps = [(x, y) for x in range(-1, 2) for y in range(-1, 2)]
+class Queen(Piece, DirectionMovementMixin):
+    movement_directions = [(x, y) for x in range(-1, 2) for y in range(-1, 2)]
 
     def __init__(self, color, current_square):
         super().__init__(QUEEN, color, current_square)
@@ -193,8 +185,8 @@ class Queen(IterativeStepMixin, Piece):
         return ("\u265B" if self.color == WHITE else '\u2655').center(5)
 
 
-class King(SingleStepMixin, Piece):
-    steps = [(x, y) for x in range(-1, 2) for y in range(-1, 2)]
+class King(Piece, SingleMovementMixin):
+    movement_directions = [(x, y) for x in range(-1, 2) for y in range(-1, 2)]
 
     def __init__(self, color, current_square):
         super().__init__(KING, color, current_square)
@@ -204,103 +196,72 @@ class King(SingleStepMixin, Piece):
 
 
 class PiecesManager:
-    controlled_squares = []
-    check_pieces = []
+    opponent_possible_movement_squares = []
+    opponent_check_pieces = []
+    pieces = {}
 
-    def __init__(self, configuration):
-        self.pieces = {
-            WHITE: self._initiate_pieces(WHITE, configuration["WHITE"]),
-            BLACK: self._initiate_pieces(BLACK, configuration["BLACK"])
+    def __init__(self, pieces_configuration):
+        __class__.pieces = {
+            WHITE: self._initiate_pieces(WHITE, pieces_configuration["WHITE"]),
+            BLACK: self._initiate_pieces(BLACK, pieces_configuration["BLACK"])
         }
 
-    def move_piece(self, color, from_square, to_square):
-        piece = self.pieces[color].get(from_square)
+    def move_piece(self, from_square, to_square):
+        """
+        Change piece location square
+        :param turn:
+        :param from_square:
+        :param to_square:
+        :return:
+        """
+        piece = self.pieces[Game.turn].get(from_square)
         if piece:
             piece.move(to_square)
-            del self.pieces[color][from_square]
-            self.pieces[color][to_square] = piece
+            del self.pieces[Game.turn][from_square]
+            self.pieces[Game.turn][to_square] = piece
 
-    def get_black_piece(self, square, color=None):
-        piece = self.pieces[BLACK].get(square)
-        return piece if color and piece.color == color else None
-
-    def get_piece(self, square):
+    @classmethod
+    def get_piece(cls, square):
         """
         Get piece color on square
-        :param square: Coordinates(x, y)
+        :param square: Square(x, y)
         :return: None if no piece on square
         :return: 1 if WHITE piece on square
         :return: 0 if BLACK piece on square
         """
-        all_pieces = {**self.pieces[WHITE], **self.pieces[BLACK]}
+        all_pieces = {**cls.pieces[WHITE], **cls.pieces[BLACK]}
         return all_pieces.get(square)
 
-    def calculate_opponent_available_moves(self, turn, board):
-        self.controlled_squares = []
-        opponent_color = WHITE if turn == BLACK else BLACK
+    def calculate_opponent_possible_movement_squares(self):
+        self.opponent_possible_movement_squares = []
+        opponent_color = Game.get_opponent_color()
         for square, piece in self.pieces[opponent_color].items():
-            self.controlled_squares += piece.calculate_available_moves(turn,
-                                                                       board)
+            piece.calculate_possible_movement_squares(Game.turn)
+            self.opponent_possible_movement_squares += \
+                piece.possible_movement_squares
 
-    def get_available_moves(self, turn, board):
+    def get_possible_movement_squares(self):
         """
         Get available moves for current turn pieces
         :return:
         """
-        available_moves = {}
-        for square, piece in self.pieces[turn].items():
-            available_moves[square] = \
-                piece.calculate_available_moves(turn, board,
-                                                self.controlled_squares,
-                                                self.check_pieces)
-        return available_moves
+        possible_movement_squares = {}
+        for square, piece in self.pieces[Game.turn].items():
+            piece.calculate_possible_movement_squares()
+            possible_movement_squares.update(
+                {square: piece.possible_movement_squares})
+        return possible_movement_squares
 
     def _initiate_pieces(self, color, configuration):
         pieces = {}
         for piece, squares in configuration.items():
             _class = globals()[piece.capitalize()]
             for square in squares:
-                _square = Coordinates.from_an(square)
+                _square = Square.from_an(square)
                 pieces.update({
                     _square: _class(color, _square)
                 })
         return pieces
-
-
-class Board:
-    def __init__(self, configuration):
-        self.pieces = {}
-        self._initiate_pieces(configuration['WHITE'], 1)
-        self._initiate_pieces(configuration['BLACK'], 0)
-
-    def _initiate_pieces(self, configuration, value):
-        for piece, squares in configuration.items():
-            for square in squares:
-                square_ = Coordinates.from_an(square)
-                self.pieces[square_] = value
-
-    def move_piece(self, from_square, to_square):
-        piece = self.pieces.get(from_square)
-        del self.pieces[from_square]
-        self.pieces[to_square] = piece
-
-    def get_piece(self, square):
-        return self.pieces.get(square)
-
-    def is_square_on_board(self, square):
-        return 0 <= square.x <= 7 and 0 <= square.y <= 7
-
-
-class Game:
-    def __init__(self, configuration):
-        self.turn = WHITE
-        self.moves = 0
-        self.is_check = False
-        self.board = Board(configuration)
-        self.pieces_manager = PiecesManager(configuration)
-
-    def change_turn(self):
-        self.turn = BLACK if self.turn == WHITE else WHITE
 
     def _validate_move(self, from_square, to_square):
         """
@@ -310,21 +271,32 @@ class Game:
         :param to_square:
         :return:
         """
-        piece = self.pieces_manager.get_piece(from_square)
+        piece = self.get_piece(from_square)
 
-        if not piece or piece.color != self.turn or \
+        if not piece or piece.color != Game.turn or \
                 to_square not in piece.available_moves:
             raise InvalidMoveError(f"Invalid move for {from_square}")
 
-    def make_move(self, coordinates1, coordinates2):
-        from_square = Coordinates.from_an(coordinates1)
-        to_square = Coordinates.from_an(coordinates2)
-        self._validate_move(from_square, to_square)
-        self.board.move_piece(from_square, to_square)
-        self.pieces_manager.move_piece(self.turn, from_square, to_square)
 
-    def get_available_moves(self):
-        return self.pieces_manager.get_available_moves(self.turn, self.board)
+class Game:
+    turn = WHITE
+    total_moves = 0
+    is_check = False
+
+    def __init__(self, configuration):
+        self.pieces_manager = PiecesManager(configuration)
+
+    @classmethod
+    def get_opponent_color(cls):
+        return WHITE if cls.turn == BLACK else BLACK
+
+    def change_turn(self):
+        self.turn = Game.get_opponent_color()
+
+    def make_move(self, square1, square2):
+        from_square = Square.from_an(square1)
+        to_square = Square.from_an(square2)
+        self.pieces_manager.move_piece(from_square, to_square)
 
     def get_board(self):
         for y in range(7, -1, -1):
@@ -333,7 +305,7 @@ class Game:
             print(y + 1, end='')
             for x in range(8):
                 print('|', end='')
-                piece = self.pieces_manager.get_piece(Coordinates(x, y))
+                piece = self.pieces_manager.get_piece(Square(x, y))
                 print(piece if piece else ' ' * 5, end='')
             print('|')
         print(' ', end='')
@@ -347,10 +319,11 @@ class Game:
         while True:
             try:
                 self.get_board()
-                available_moves = self.get_available_moves()
+                available_moves = \
+                    self.pieces_manager.get_possible_movement_squares()
 
-                for piece, moves in available_moves.items():
-                    print(f"{piece}: {[str(m) for m in moves]}")
+                for square, moves in available_moves.items():
+                    print(f"{square}: {[str(m) for m in moves]}")
 
                 from_, to = input(
                     f"{'White' if self.turn == WHITE else 'Black'} move: ").split()
