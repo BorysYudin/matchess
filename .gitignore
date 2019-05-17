@@ -107,3 +107,5 @@ cover/
 .idea/
 *.swp
 *.swo
+
+engine/temp.json
