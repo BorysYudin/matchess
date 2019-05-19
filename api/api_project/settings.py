@@ -31,7 +31,8 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_PROJECT_APPS = [
-    'chat'
+    'authentication',
+    'chat',
 ]
 
 INSTALLED_APPS = [
@@ -61,7 +62,7 @@ ROOT_URLCONF = 'api_project.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -138,3 +139,6 @@ CHANNEL_LAYERS = {
         }
     }
 }
+
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/'
