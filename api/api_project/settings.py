@@ -33,6 +33,7 @@ ALLOWED_HOSTS = []
 INSTALLED_PROJECT_APPS = [
     'authentication',
     'chat',
+    'chess_game'
 ]
 
 INSTALLED_APPS = [
@@ -142,3 +143,12 @@ CHANNEL_LAYERS = {
 
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+
+
+# Memcached
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+        'LOCATION': '127.0.0.1:11211',
+    }
+}

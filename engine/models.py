@@ -283,7 +283,12 @@ class Game:
     total_moves = 0
     is_check = False
 
-    def __init__(self, configuration):
+    def __init__(self, configuration=None):
+        if not configuration:
+            filename = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                    'default_pieces_configuration.json')
+            with open(filename) as f:
+                configuration = json.load(f)
         self.pieces_manager = PiecesManager(configuration)
 
     @classmethod
