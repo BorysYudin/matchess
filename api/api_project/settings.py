@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/2.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/2.2/ref/settings/
 """
-
+import datetime
 import os
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -31,7 +31,7 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_PROJECT_APPS = [
-    'authentication',
+    'core',
     'chat',
     'chess_game'
 ]
@@ -46,11 +46,18 @@ INSTALLED_APPS = [
 
     # third parties
     'channels',
+    'rest_framework',
+    'corsheaders',
+
 ] + INSTALLED_PROJECT_APPS
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+
+    # corsheaders package
+    'corsheaders.middleware.CorsMiddleware',
+
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -128,6 +135,26 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
+# Django rest framework
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_jwt.authentication.JSONWebTokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ),
+}
+
+JWT_AUTH = {
+    'JWT_RESPONSE_PAYLOAD_HANDLER': 'core.utils.signup_response_handler',
+    'JWT_EXPIRATION_DELTA': datetime.timedelta(days=30),
+}
+
+CORS_ORIGIN_WHITELIST = (
+    'http://localhost:3000',
+)
 
 # Channels
 ASGI_APPLICATION = 'api_project.routing.application'
@@ -140,10 +167,6 @@ CHANNEL_LAYERS = {
         }
     }
 }
-
-LOGIN_REDIRECT_URL = '/'
-LOGOUT_REDIRECT_URL = '/'
-
 
 # Memcached
 CACHES = {
