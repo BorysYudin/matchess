@@ -1,13 +1,14 @@
 import thunk from 'redux-thunk';
-import { createBrowserHistory as createHistory } from 'history';
-import storage from 'redux-persist/lib/storage';
+import storage from "redux-persist/es/storage";
+import autoMergeLevel2 from 'redux-persist/lib/stateReconciler/autoMergeLevel2';
 
-import {createStore, applyMiddleware, compose} from 'redux'
-import {routerMiddleware} from 'connected-react-router'
+import {createStore, applyMiddleware, compose} from 'redux';
+import {routerMiddleware} from 'connected-react-router';
 import {persistStore, persistReducer} from 'redux-persist';
+import { createFilter } from "redux-persist-transform-filter";
 
 import createRootReducer from '../_reducers';
-import {authMiddlewares} from './middlewares';
+import {createBrowserHistory as createHistory} from 'history';
 
 export const history = createHistory();
 
@@ -15,7 +16,6 @@ const initialState = {};
 const enhancers = [];
 const middleware = [
     thunk,
-    authMiddlewares.jwt,
     routerMiddleware(history)
 ];
 
@@ -32,18 +32,24 @@ const composedEnhancers = compose(
     ...enhancers
 );
 
+const persistedFilter = createFilter("auth", [
+    "accessToken"
+]);
+
 const persistConfig = {
     key: 'matchess',
-    storage: storage,
-    whitelist: ['auth']
+    whitelist: ["auth"],
+    transforms: [persistedFilter],
+    stateReconciler: autoMergeLevel2,
+    storage,
 };
 
 const rootReducer = createRootReducer(history);
 
-const pReducer = persistReducer(persistConfig, rootReducer);
+const persistedReducer = persistReducer(persistConfig, rootReducer);
 
 export const store = createStore(
-    pReducer,
+    persistedReducer,
     initialState,
     composedEnhancers
 );

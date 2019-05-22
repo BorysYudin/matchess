@@ -1,7 +1,7 @@
 import moment from "moment";
 import jwtDecode from "jwt-decode";
 
-import {authConstants} from "../constants";
+import {authActions} from "../../_actions";
 
 function jwt({dispatch, getState}) {
     return next => action => {
@@ -15,10 +15,7 @@ function jwt({dispatch, getState}) {
                     !accessTokenExpiration ||
                     moment(accessTokenExpiration * 1000) < moment(Date.now())
                 )
-                    dispatch({
-                        type: authConstants.LOGOUT,
-                        error: "Session expired"
-                    });
+                    dispatch(authActions.logout('Session expired'));
             }
         }
         return next(action);

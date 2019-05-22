@@ -18,6 +18,7 @@ class Header extends React.Component {
         super(props);
 
         this.closeDialog = this.closeDialog.bind(this);
+        this.handleLogin = this.handleLogin.bind(this);
     }
 
     displayDialog(form) {
@@ -34,12 +35,15 @@ class Header extends React.Component {
         this.setState({dialog: null});
     }
 
-    handleLogin(data) {
-        console.log('Login:' + data);
-    }
-
     handleSignup(data) {
         console.log('Signup:' + data);
+    }
+
+    handleLogin(e, data) {
+        e.preventDefault();
+
+        const {handleLogin} = this.props;
+        handleLogin(data).then(this.closeDialog).catch(err => {});
     }
 
     render() {
@@ -76,7 +80,8 @@ function mapStateToProps(state) {
 
 function mapDispatchToProps(dispatch) {
     return {
-        handleLogout: () => dispatch(authActions.logout())
+        handleLogout: () => dispatch(authActions.logout()),
+        handleLogin: data => dispatch(authActions.login(data))
     }
 }
 
@@ -84,6 +89,7 @@ export default connect(mapStateToProps, mapDispatchToProps)(Header);
 
 Header.propTypes = {
     isLoggedIn: PropTypes.bool.isRequired,
-    handleLogout: PropTypes.func.isRequired
+    handleLogout: PropTypes.func.isRequired,
+    handleLogin: PropTypes.func.isRequired,
 };
 
