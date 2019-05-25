@@ -9,7 +9,7 @@ import {authSelectors} from "../../_selectors";
 function LoginDialog(props) {
     return (
         <div>
-            {props.error && <p>{props.error}</p>}
+            {props.errors && <p>{JSON.stringify(props.errors, null, 2)}</p>}
             <button onClick={props.handleClose}>Close</button>
             <LoginForm handleLogin={props.handleLogin}/>
         </div>
@@ -18,7 +18,7 @@ function LoginDialog(props) {
 
 function mapStateToProps(state) {
     return {
-        error: authSelectors.getError(state)
+        errors: authSelectors.getLoginErrors(state)
     };
 }
 
@@ -27,5 +27,5 @@ export default connect(mapStateToProps)(LoginDialog);
 LoginDialog.propTypes = {
     handleLogin: PropTypes.func.isRequired,
     handleClose: PropTypes.func.isRequired,
-    error: PropTypes.string.isRequired
+    errors: PropTypes.object
 };

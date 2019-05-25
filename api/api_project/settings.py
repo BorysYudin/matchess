@@ -46,7 +46,6 @@ INSTALLED_APPS = [
                      'channels',
                      'rest_framework',
                      'corsheaders',
-
                  ] + INSTALLED_PROJECT_APPS
 
 MIDDLEWARE = [
@@ -139,6 +138,11 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ),
+    'DEFAULT_RENDERER_CLASSES': (
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer'
+    ),
+    'NON_FIELD_ERRORS_KEY': '_general_errors'
 }
 
 JWT_AUTH = {

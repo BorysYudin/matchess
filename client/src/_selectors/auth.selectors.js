@@ -1,10 +1,12 @@
 const getAccessToken = state => state.auth.accessToken;
 const isLoggedIn = state => Boolean(getAccessToken(state));
-const getError = state => state.auth.error;
+const getLoginErrors = state => state.auth.loginErrors;
+const getSignupErrors = state => state.auth.signupErrors;
 
 const authSelectors = {
     getAccessToken,
-    getError,
+    getLoginErrors,
+    getSignupErrors,
     isLoggedIn
 };
 

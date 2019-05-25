@@ -15,8 +15,8 @@ function login(data) {
         return {type: authConstants.LOGIN_SUCCESS, payload};
     }
 
-    function failure(payload) {
-        return {type: authConstants.LOGIN_FAILURE, payload};
+    function failure(errors) {
+        return {type: authConstants.LOGIN_FAILURE, payload: {errors}};
     }
 
     return dispatch => {
@@ -24,18 +24,36 @@ function login(data) {
 
         return authService.login(data)
             .then(data => dispatch(success(data)))
-            .catch(response => {
-                dispatch(failure({
-                    'message': 'Invalid username/password combination'
-                }));
-                return Promise.reject(response);
-            });
+            .catch(data => dispatch(failure(data)));
+    };
+}
+
+function signup(data) {
+    function request() {
+        return {type: authConstants.SIGNUP_REQUEST};
+    }
+
+    function success(payload) {
+        return {type: authConstants.SIGNUP_SUCCESS, payload};
+    }
+
+    function failure(errors) {
+        return {type: authConstants.SIGNUP_FAILURE, payload: {errors}};
+    }
+
+    return dispatch => {
+        dispatch(request());
+
+        return authService.signup(data)
+            .then(data => dispatch(success(data)))
+            .catch(data => dispatch(failure(data)));
     };
 }
 
 const authActions = {
     logout,
-    login
+    login,
+    signup
 };
 
 export default authActions;
